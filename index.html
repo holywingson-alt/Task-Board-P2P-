@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TracBoard — P2P Task Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a26;
+    --border: #2a2a40;
+    --accent: #7c5cfc;
+    --accent2: #fc5c7d;
+    --accent3: #5cfc9c;
+    --text: #e8e8f0;
+    --muted: #6060a0;
+    --todo: #fc5c7d;
+    --inprog: #fcb05c;
+    --done: #5cfc9c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124,92,252,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,92,252,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridDrift 20s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  @keyframes gridDrift {
+    0% { transform: translate(0,0); }
+    100% { transform: translate(40px, 40px); }
+  }
+
+  /* Header */
+  header {
+    position: relative;
+    z-index: 10;
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.8);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 0 20px rgba(124,92,252,0.4);
+  }
+
+  .logo-text {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span {
+    color: var(--accent);
+  }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .badge {
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-p2p {
+    background: rgba(124,92,252,0.15);
+    border: 1px solid rgba(124,92,252,0.4);
+    color: var(--accent);
+  }
+
+  .badge-live {
+    background: rgba(92,252,156,0.1);
+    border: 1px solid rgba(92,252,156,0.3);
+    color: var(--done);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--done);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    position: relative;
+    z-index: 10;
+    padding: 16px 40px;
+    display: flex;
+    gap: 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .stat-value.todo { color: var(--todo); }
+  .stat-value.inprog { color: var(--inprog); }
+  .stat-value.done { color: var(--done); }
+  .stat-value.total { color: var(--accent); }
+
+  /* Add task area */
+  .add-task-bar {
+    position: relative;
+    z-index: 10;
+    padding: 20px 40px;
+    display: flex;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.6);
+  }
+
+  .task-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .task-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,92,252,0.15);
+  }
+
+  .task-input::placeholder { color: var(--muted); }
+
+  .priority-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .priority-select:focus { border-color: var(--accent); }
+
+  .btn-add {
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    color: white;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+    box-shadow: 0 4px 20px rgba(124,92,252,0.3);
+  }
+
+  .btn-add:hover {
+    background: #9b7dfe;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 28px rgba(124,92,252,0.45);
+  }
+
+  .btn-add:active { transform: translateY(0); }
+
+  /* Board */
+  .board {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    padding: 32px 40px;
+    min-height: calc(100vh - 260px);
+  }
+
+  .column {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: border-color 0.2s;
+  }
+
+  .column.drag-over {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(124,92,252,0.2);
+  }
+
+  .col-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+
+  .col-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .col-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .col-count {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 3px 9px;
+    border-radius: 100px;
+  }
+
+  /* Task card */
+  .task-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    cursor: grab;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    animation: cardIn 0.25s ease-out;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .task-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    border-radius: 12px 0 0 12px;
+  }
+
+  .task-card.priority-high::before { background: var(--todo); }
+  .task-card.priority-medium::before { background: var(--inprog); }
+  .task-card.priority-low::before { background: var(--done); }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .task-card:hover {
+    border-color: rgba(124,92,252,0.4);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    transform: translateY(-2px);
+  }
+
+  .task-card:active { cursor: grabbing; }
+
+  .task-card.dragging {
+    opacity: 0.4;
+    transform: scale(0.97);
+  }
+
+  .task-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .task-title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .task-actions {
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .task-card:hover .task-actions { opacity: 1; }
+
+  .task-btn {
+    width: 24px;
+    height: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1;
+  }
+
+  .task-btn:hover { background: rgba(252,92,125,0.15); color: var(--todo); border-color: var(--todo); }
+
+  .task-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .task-priority {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 100px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .priority-high .task-priority { background: rgba(252,92,125,0.15); color: var(--todo); }
+  .priority-medium .task-priority { background: rgba(252,176,92,0.15); color: var(--inprog); }
+  .priority-low .task-priority { background: rgba(92,252,156,0.15); color: var(--done); }
+
+  .task-id {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    opacity: 0.5;
+  }
+
+  /* P2P sync notification */
+  .sync-toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,92,252,0.1);
+    transform: translateY(80px);
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+
+  .sync-toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .sync-icon {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Agent log */
+  .agent-log {
+    position: fixed;
+    bottom: 32px;
+    left: 40px;
+    width: 320px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    z-index: 100;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+  }
+
+  .agent-log-title {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .agent-log-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 90px;
+    overflow: hidden;
+  }
+
+  .log-entry {
+    color: var(--muted);
+    line-height: 1.5;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .log-entry .log-time { color: var(--accent); }
+  .log-entry .log-action { color: var(--done); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .empty-col {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  @media (max-width: 900px) {
+    .board { grid-template-columns: 1fr; }
+    header { padding: 16px 20px; }
+    .stats-bar { padding: 12px 20px; gap: 20px; }
+    .add-task-bar { padding: 16px 20px; flex-wrap: wrap; }
+    .agent-log { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">TB</div>
+    <div class="logo-text">Trac<span>Board</span></div>
+  </div>
+  <div class="header-meta">
+    <span class="badge badge-p2p">⬡ Intercom P2P</span>
+    <span class="badge badge-live">
+      <span class="pulse-dot"></span>
+      AGENTS ACTIVE
+    </span>
+  </div>
+</header>
+
+<!-- Stats Bar -->
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-label">Total Tasks</div>
+    <div class="stat-value total" id="stat-total">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Todo</div>
+    <div class="stat-value todo" id="stat-todo">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">In Progress</div>
+    <div class="stat-value inprog" id="stat-inprog">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Done</div>
+    <div class="stat-value done" id="stat-done">0</div>
+  </div>
+</div>
+
+<!-- Add Task Bar -->
+<div class="add-task-bar">
+  <input class="task-input" id="taskInput" type="text" placeholder="Add a new task... (press Enter)" maxlength="120"/>
+  <select class="priority-select" id="prioritySelect">
+    <option value="high">🔴 HIGH</option>
+    <option value="medium" selected>🟡 MEDIUM</option>
+    <option value="low">🟢 LOW</option>
+  </select>
+  <button class="btn-add" onclick="addTask()">+ Add Task</button>
+</div>
+
+<!-- Board -->
+<div class="board">
+  <!-- TODO Column -->
+  <div class="column" id="col-TODO" ondragover="dragOver(event)" ondrop="drop(event, 'TODO')" ondragleave="dragLeave(event)">
+    <div class="col-header">
+      <div class="col-title">
+        <span class="col-dot" style="background: var(--todo);"></span>
+        TODO
+      </div>
+      <span class="col-count" id="count-TODO">0</span>
+    </div>
+    <div class="col-cards" id="cards-TODO"></div>
+  </div>
+
+  <!-- IN PROGRESS Column -->
+  <div class="column" id="col-IN_PROGRESS" ondragover="dragOver(event)" ondrop="drop(event, 'IN_PROGRESS')" ondragleave="dragLeave(event)">
+    <div class="col-header">
+      <div class="col-title">
+        <span class="col-dot" style="background: var(--inprog);"></span>
+        IN PROGRESS
+      </div>
+      <span class="col-count" id="count-IN_PROGRESS">0</span>
+    </div>
+    <div class="col-cards" id="cards-IN_PROGRESS"></div>
+  </div>
+
+  <!-- DONE Column -->
+  <div class="column" id="col-DONE" ondragover="dragOver(event)" ondrop="drop(event, 'DONE')" ondragleave="dragLeave(event)">
+    <div class="col-header">
+      <div class="col-title">
+        <span class="col-dot" style="background: var(--done);"></span>
+        DONE
+      </div>
+      <span class="col-count" id="count-DONE">0</span>
+    </div>
+    <div class="col-cards" id="cards-DONE"></div>
+  </div>
+</div>
+
+<!-- Sync Toast -->
+<div class="sync-toast" id="syncToast">
+  <div class="sync-icon"></div>
+  <span id="syncMsg">Syncing over Intercom P2P...</span>
+</div>
+
+<!-- Agent Log -->
+<div class="agent-log">
+  <div class="agent-log-title">
+    <span class="pulse-dot"></span>
+    Agent Activity Log
+  </div>
+  <div class="agent-log-entries" id="agentLog"></div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────
+let tasks = {};
+let dragId = null;
+
+const INITIAL_TASKS = [
+  { id: uid(), title: "Set up Intercom sidechannel connection", priority: "high", status: "DONE" },
+  { id: uid(), title: "Design replicated state schema for tasks", priority: "high", status: "DONE" },
+  { id: uid(), title: "Implement agent claim/unclaim protocol", priority: "medium", status: "IN_PROGRESS" },
+  { id: uid(), title: "Build TracBoard UI frontend", priority: "medium", status: "IN_PROGRESS" },
+  { id: uid(), title: "Write SKILL.md for agent instructions", priority: "low", status: "TODO" },
+  { id: uid(), title: "Add drag-and-drop between columns", priority: "low", status: "TODO" },
+  { id: uid(), title: "Broadcast task updates over P2P network", priority: "medium", status: "TODO" },
+];
+
+// ── Utils ──────────────────────────────────────
+function uid() {
+  return Math.random().toString(36).slice(2, 9).toUpperCase();
+}
+
+function now() {
+  return new Date().toLocaleTimeString('en-US', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+// ── Render ─────────────────────────────────────
+function render() {
+  const cols = ['TODO', 'IN_PROGRESS', 'DONE'];
+  cols.forEach(status => {
+    const container = document.getElementById(`cards-${status}`);
+    const colTasks = Object.values(tasks).filter(t => t.status === status);
+    document.getElementById(`count-${status}`).textContent = colTasks.length;
+
+    if (colTasks.length === 0) {
+      container.innerHTML = '<div class="empty-col">drop tasks here</div>';
+      return;
+    }
+
+    container.innerHTML = colTasks.map(t => `
+      <div class="task-card priority-${t.priority}" 
+           id="card-${t.id}" 
+           draggable="true"
+           ondragstart="dragStart(event, '${t.id}')"
+           ondragend="dragEnd(event)">
+        <div class="task-top">
+          <div class="task-title">${escHtml(t.title)}</div>
+          <div class="task-actions">
+            <button class="task-btn" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
+          </div>
+        </div>
+        <div class="task-footer">
+          <span class="task-priority">${t.priority.toUpperCase()}</span>
+          <span class="task-id">#${t.id}</span>
+        </div>
+      </div>
+    `).join('');
+  });
+
+  // Update stats
+  const all = Object.values(tasks);
+  document.getElementById('stat-total').textContent = all.length;
+  document.getElementById('stat-todo').textContent = all.filter(t => t.status === 'TODO').length;
+  document.getElementById('stat-inprog').textContent = all.filter(t => t.status === 'IN_PROGRESS').length;
+  document.getElementById('stat-done').textContent = all.filter(t => t.status === 'DONE').length;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Actions ────────────────────────────────────
+function addTask() {
+  const input = document.getElementById('taskInput');
+  const priority = document.getElementById('prioritySelect').value;
+  const title = input.value.trim();
+  if (!title) return;
+
+  const id = uid();
+  tasks[id] = { id, title, priority, status: 'TODO' };
+  input.value = '';
+
+  log('create_task', `"${title.slice(0,28)}${title.length>28?'…':''}"`, id);
+  showSync('Broadcasting new task to Intercom P2P...');
+  render();
+}
+
+function deleteTask(id) {
+  const t = tasks[id];
+  if (!t) return;
+  log('delete_task', `#${id}`, id);
+  delete tasks[id];
+  showSync('Syncing deletion across agents...');
+  render();
+}
+
+// ── Drag & Drop ────────────────────────────────
+function dragStart(e, id) {
+  dragId = id;
+  setTimeout(() => {
+    const el = document.getElementById(`card-${id}`);
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+
+function dragEnd(e) {
+  if (dragId) {
+    const el = document.getElementById(`card-${dragId}`);
+    if (el) el.classList.remove('dragging');
+  }
+}
+
+function dragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+
+function dragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function drop(e, newStatus) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragId || !tasks[dragId]) return;
+
+  const oldStatus = tasks[dragId].status;
+  if (oldStatus === newStatus) return;
+
+  tasks[dragId].status = newStatus;
+  log('update_status', `→ ${newStatus.replace('_',' ')}`, dragId);
+  showSync(`Propagating status change over Intercom...`);
+  render();
+  dragId = null;
+}
+
+// ── Sync Toast ─────────────────────────────────
+let syncTimer;
+function showSync(msg) {
+  const toast = document.getElementById('syncToast');
+  document.getElementById('syncMsg').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+// ── Agent Log ──────────────────────────────────
+const LOG_ACTIONS = ['create_task', 'update_status', 'claim_task', 'delete_task', 'list_tasks'];
+function log(action, detail, id) {
+  const el = document.getElementById('agentLog');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">[${now()}]</span> <span class="log-action">${action}</span> ${detail}`;
+  el.prepend(entry);
+  // Keep max 4 entries
+  while (el.children.length > 4) el.removeChild(el.lastChild);
+}
+
+// ── Simulated Agent Activity ────────────────────
+const agentMessages = [
+  ['list_tasks', 'filter: all'],
+  ['claim_task', '→ agent-7f2a', ],
+  ['update_status', '→ IN PROGRESS'],
+  ['list_tasks', 'filter: TODO'],
+];
+
+let agentIdx = 0;
+function simulateAgent() {
+  const msg = agentMessages[agentIdx % agentMessages.length];
+  log(msg[0], msg[1], 'AGT');
+  agentIdx++;
+}
+
+// ── Init ───────────────────────────────────────
+INITIAL_TASKS.forEach(t => { tasks[t.id] = t; });
+render();
+
+// Periodic simulated agent activity
+setInterval(simulateAgent, 5000);
+
+// Enter key on input
+document.getElementById('taskInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addTask();
+});
+</script>
+
+</body>
+</html>
